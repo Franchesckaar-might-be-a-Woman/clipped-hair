@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdbool.h>
 
+#include "tree.h"
 #include "language_definition.h"
 
 #define ASSERT_EQUAL(a, x, y) do {			\
@@ -13,62 +14,79 @@
 	printf("PASS	%s\n", a);				\
 } while(0);
 
-bool test_01_lexer_byte(void) {
-	printf("TEST	lexer properly handles bytes\n");
+#define ASSERT_STRING_EQUAL(a, x, y) do {	\
+	if(strcmp(x, y) != 0) {					\
+		printf("FAIL	%s\n", a);			\
+		printf("NOTE	%s != %s\n", x, y);	\
+		return false;						\
+	}										\
+	printf("PASS	%s\n", a);				\
+} while(0);
 
-	char input_value[] = "0x50";
-	struct LanguageDefinitionTokenList *output_list = language_definition_tokenize(input_value);
-
-	ASSERT_EQUAL("is a byte", output_list->type, LANGUAGE_DEFINITION_TOKEN_BYTE);
-	ASSERT_EQUAL("has valid start", output_list->start, 2);
-	ASSERT_EQUAL("has valid end", output_list->end, 3);
-	ASSERT_EQUAL("is only", output_list->next, NULL);
-
-	return true;
-}
-
-bool test_02_lexer_search_replace(void) {
-	printf("TEST	lexer properly handles search-replace\n");
+bool test_01_lexer_tokenizes(void) {
+	printf("TEST	lexer properly tokenizes search-replace\n");
 
 	char input_value[] = "/nop/0x90/";
-	struct LanguageDefinitionTokenList *output_list = language_definition_tokenize(input_value);
+	struct LanguageDefinitionSearchReplaceList *output_list = language_definition_tokenize(input_value);
 
-	ASSERT_EQUAL("first token is search", output_list->type, LANGUAGE_DEFINITION_TOKEN_RR_SEARCH);
-	ASSERT_EQUAL("first token has valid start", output_list->start, 1);
-	ASSERT_EQUAL("first token has valid end", output_list->end, 3);
-
-	output_list = output_list->next;
-	ASSERT_EQUAL("second token is replace", output_list->type, LANGUAGE_DEFINITION_TOKEN_RR_REPLACE);
-	ASSERT_EQUAL("second token has valid start", output_list->start, 5);
-	ASSERT_EQUAL("second token has valid end", output_list->end, 8);
-	ASSERT_EQUAL("only contains two tokens", output_list->next, NULL);
+	ASSERT_STRING_EQUAL("search is correct", output_list->search, "nop");
+	ASSERT_STRING_EQUAL("replace is correct", output_list->replace, "0x90");
+	ASSERT_EQUAL("only contains one tokens", output_list->next, NULL);
 
 	return true;
 }
 
-bool test_03_lexer_tricky_byte(void) {
-	printf("TEST	lexer supports tricky byte sequence\n");
+bool test_02_lexer_creates_command_tree(void) {
+	printf("TEST	lexer creates valid command tree\n");
 
-	char input_value[] = "000x50";
-	struct LanguageDefinitionTokenList *output_list = language_definition_tokenize(input_value);
+	struct LanguageDefinitionSearchReplaceList input_list;
+	input_list.search = "no";
+	input_list.replace = "0x90";
+	input_list.next = NULL;
 
-	ASSERT_EQUAL("is a byte", output_list->type, LANGUAGE_DEFINITION_TOKEN_BYTE);
-	ASSERT_EQUAL("has valid start", output_list->start, 4);
-	ASSERT_EQUAL("has valid end", output_list->end, 5);
-	ASSERT_EQUAL("is only", output_list->next, NULL);
+	struct TreeLeaf *output_tree = language_definition_create_command_tree(&input_list);
+	ASSERT_EQUAL("first leaf has no content", output_tree->content, NULL);
+	ASSERT_EQUAL("second leaf has no content", output_tree->links->to->content, NULL);
+	ASSERT_STRING_EQUAL("third leaf contains replace string", output_tree->links->to->links->to->content, input_list.replace);
 
 	return true;
 }
 
-// To be done: ///nop/0x90/
-// To be done: 0/nop/0x90/
+bool test_03_lexer_resolves_from_program(void) {
+	printf("TEST	lever resolves all from program\n");
+
+	char input_program[] = "/no/0x900x80/";
+	struct LanguageDefinitionSearchReplaceList *sr_list = language_definition_tokenize(input_program);
+	struct TreeLeaf *tree_root = language_definition_create_command_tree(sr_list);
+	language_definition_resolve_command_tree(tree_root);
+
+	ASSERT_EQUAL("resolves to two bytes - first", ((struct LanguageDefinitionDependencyList *) tree_root->links->to->links->to->content)->byte, (char) 0x90);
+	ASSERT_EQUAL("resolves to two bytes - second", ((struct LanguageDefinitionDependencyList *) tree_root->links->to->links->to->content)->next->byte, (char) 0x80);
+	ASSERT_EQUAL("resolves to two bytes - no third", ((struct LanguageDefinitionDependencyList *) tree_root->links->to->links->to->content)->next->next, NULL);
+
+	return true;
+}
+
+bool test_04_full_compilation_process(void) {
+	char input_program[] = "/nop/0x90//mnv/0x53/ nop mnop mnv";
+	struct LanguageDefinitionCompilerOutput *output = language_definition_compile(input_program);
+
+	ASSERT_EQUAL("reports right size", output->size, 3);
+	ASSERT_EQUAL("first byte", output->program[0], (char) 0x90);
+	ASSERT_EQUAL("second byte", output->program[1], (char) 0x90);
+	ASSERT_EQUAL("third byte", output->program[2], (char) 0x53);
+	ASSERT_EQUAL("no more", output->program[3], 0x00);
+
+	return true;
+}
 
 int main(void) {
 	bool success = true;
 
-	success &= ~test_01_lexer_byte();
-	success &= ~test_02_lexer_search_replace();
-	success &= ~test_03_lexer_tricky_byte();
+	success &= ~test_01_lexer_tokenizes();
+	success &= ~test_02_lexer_creates_command_tree();
+	success &= ~test_03_lexer_resolves_from_program();
+	success &= ~test_04_full_compilation_process();
 
 	return success;
 }
