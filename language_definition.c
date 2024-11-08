@@ -65,6 +65,7 @@ struct TreeLeaf *language_definition_create_command_tree(struct LanguageDefiniti
 
 	struct TreeLeaf *command_tree_root = malloc(sizeof(struct TreeLeaf));
 	struct TreeLeaf *command_tree_current = command_tree_root;
+	struct TreeLeaf *command_tree_found;
 
 	int current_index;
 	char current_char;
@@ -72,7 +73,10 @@ struct TreeLeaf *language_definition_create_command_tree(struct LanguageDefiniti
 	for(search_replace_list_current = search_replace_list_root; search_replace_list_current != NULL; search_replace_list_current = search_replace_list_current->next) {
 		for(current_index = 0; current_index < strlen(search_replace_list_current->search); current_index++) {
 			current_char = search_replace_list_current->search[current_index];
-			command_tree_current = tree_insert_leaf((uint32_t) current_char, command_tree_current);
+			// Unify tree leaves, since tree library does not assumes identifiers to be unique
+			command_tree_found = tree_find_child((uint32_t) current_char, command_tree_current);
+			if(command_tree_found != NULL) command_tree_current = command_tree_found;
+			else command_tree_current = tree_insert_leaf((uint32_t) current_char, command_tree_current);
 		}
 
 		command_tree_current->content = (void *) search_replace_list_current->replace;
@@ -104,7 +108,7 @@ void language_definition_resolve_command_tree(struct TreeLeaf *command_tree_root
 			int current_index;
 			char current_char;
 
-			struct LanguageDefinitionDependencyList *dependency_list_root = malloc(sizeof(struct LanguageDefinitionDependencyTree));
+			struct LanguageDefinitionDependencyList *dependency_list_root = malloc(sizeof(struct LanguageDefinitionDependencyList));
 			struct LanguageDefinitionDependencyList *dependency_list_current = dependency_list_root;
 			struct LanguageDefinitionDependencyList *dependency_list_previous;
 
@@ -115,7 +119,7 @@ void language_definition_resolve_command_tree(struct TreeLeaf *command_tree_root
 				if(current_char == LANGUAGE_DEFINITION_CHAR_ZERO && replace[current_index + 1] == LANGUAGE_DEFINITION_CHAR_HEX) {
 					dependency_list_current->type = LANGUAGE_DEFINITION_DEPENDENCY_BYTE;
 					dependency_list_current->byte = (char_as_hex(replace[current_index + 2]) << 4) + char_as_hex(replace[current_index + 3]);
-					dependency_list_current->next = malloc(sizeof(struct LanguageDefinitionDependencyTree));
+					dependency_list_current->next = malloc(sizeof(struct LanguageDefinitionDependencyList));
 					dependency_list_previous = dependency_list_current;
 					dependency_list_current = dependency_list_current->next;
 
