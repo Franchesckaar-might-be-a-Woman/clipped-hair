@@ -117,7 +117,9 @@ void language_definition_resolve_command_tree(struct TreeLeaf *command_tree_root
 
 				// Process a byte in hexadecimal representation
 				if(current_char == LANGUAGE_DEFINITION_CHAR_ZERO && replace[current_index + 1] == LANGUAGE_DEFINITION_CHAR_HEX) {
-					dependency_list_current->type = LANGUAGE_DEFINITION_DEPENDENCY_BYTE;
+					if(current_index > 0 && replace[current_index - 1] == '|') dependency_list_current->type = LANGUAGE_DEFINITION_DEPENDENCY_MODIFIER_OR;
+					else dependency_list_current->type = LANGUAGE_DEFINITION_DEPENDENCY_BYTE;
+
 					dependency_list_current->byte = (char_as_hex(replace[current_index + 2]) << 4) + char_as_hex(replace[current_index + 3]);
 					dependency_list_current->next = malloc(sizeof(struct LanguageDefinitionDependencyList));
 					dependency_list_previous = dependency_list_current;
@@ -155,11 +157,17 @@ struct LanguageDefinitionCompilerOutput *language_definition_compile(char *input
 
 	char *current_char;
 	char *previous_match = input_program;
+	struct LanguageDefinitionDependencyList *tree_leaf_content;
+	bool has_extra_output;
 
 	for(current_char = input_program; *current_char != '\0'; current_char++) {
+		has_extra_output = false;
+
+		// Debug: show all chars in processing order
 		if(*current_char == '\n' || *current_char == ' ') printf(" ");
 		else printf("%c", *current_char);
 
+		// Skip search-replace sequences
 		if(avoid_token_current != NULL && current_char == avoid_token_current->sequence_start) {
 			printf(" S%d->", current_char - input_program);
 			current_char = avoid_token_current->sequence_end;
@@ -168,6 +176,16 @@ struct LanguageDefinitionCompilerOutput *language_definition_compile(char *input
 			continue;
 		}
 
+		// Process raw bytes
+		// XXX: redundant with previous function. Refactor with removing `current_index` in previous function.
+		if(*current_char == LANGUAGE_DEFINITION_CHAR_ZERO && *(current_char + 1) == LANGUAGE_DEFINITION_CHAR_HEX) {
+			printf(" MB%d\n", current_char - input_program);
+			output_program[output_index++] = (char_as_hex(*(current_char + 2)) << 4) + char_as_hex(*(current_char + 3));
+			current_char += 3;
+			has_extra_output = true;
+		}
+
+		// Advance in tree by current char
 		if(tree_leaf_current == tree_leaf_root) previous_match = current_char;
 		tree_leaf_current = tree_find_child(*current_char, tree_leaf_current);
 
@@ -175,13 +193,19 @@ struct LanguageDefinitionCompilerOutput *language_definition_compile(char *input
 			tree_leaf_current = tree_leaf_root;
 			current_char = previous_match;
 			printf(" %d ", current_char - input_program);
-			continue;
 		}
 
+		// Append current content from tree
 		if(tree_leaf_current->content != NULL) {
-			printf(" M%d\n", current_char - input_program);
-			output_program[output_index++] = ((struct LanguageDefinitionDependencyList *) tree_leaf_current->content)->byte;
-			// Dynamic reallocation as program grows
+			printf(" MC%d\n", current_char - input_program);
+			tree_leaf_content = (struct LanguageDefinitionDependencyList *) tree_leaf_current->content;
+			if(tree_leaf_content->type == LANGUAGE_DEFINITION_DEPENDENCY_BYTE) output_program[output_index++] = tree_leaf_content->byte;
+			else if(tree_leaf_content->type == LANGUAGE_DEFINITION_DEPENDENCY_MODIFIER_OR) output_program[output_index - 1] |= tree_leaf_content->byte;
+			has_extra_output = true;
+		}
+
+		// Dynamic reallocation as program grows
+		if(has_extra_output) {
 			if(output_index >= output_size) {
 				output_size = output_size * 4;
 				output_program = realloc(output_program, output_size * sizeof(char));

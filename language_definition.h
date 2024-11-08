@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "tree.h"
 
@@ -20,6 +21,7 @@ enum LanguageDefinitionCharDefinition {
 enum LanguageDefinitionDependencyType {
 	LANGUAGE_DEFINITION_DEPENDENCY_BYTE = 1,
 	LANGUAGE_DEFINITION_DEPENDENCY_COMMAND = 2,
+	LANGUAGE_DEFINITION_DEPENDENCY_MODIFIER_OR = 10,
 };
 
 struct LanguageDefinitionSearchReplaceList {
