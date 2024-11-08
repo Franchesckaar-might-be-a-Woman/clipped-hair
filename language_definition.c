@@ -157,10 +157,11 @@ struct LanguageDefinitionCompilerOutput *language_definition_compile(char *input
 	char *previous_match = input_program;
 
 	for(current_char = input_program; *current_char != '\0'; current_char++) {
-		printf("%c", *current_char);
+		if(*current_char == '\n' || *current_char == ' ') printf(" ");
+		else printf("%c", *current_char);
 
 		if(avoid_token_current != NULL && current_char == avoid_token_current->sequence_start) {
-			printf(" %d->\n", current_char - input_program);
+			printf(" S%d->", current_char - input_program);
 			current_char = avoid_token_current->sequence_end;
 			avoid_token_current = avoid_token_current->next;
 			printf("%d ", current_char - input_program);
@@ -173,12 +174,12 @@ struct LanguageDefinitionCompilerOutput *language_definition_compile(char *input
 		if(tree_leaf_current == NULL) {
 			tree_leaf_current = tree_leaf_root;
 			current_char = previous_match;
-			printf("\n%d ", current_char - input_program);
+			printf(" %d ", current_char - input_program);
 			continue;
 		}
 
 		if(tree_leaf_current->content != NULL) {
-			printf("%d\n", current_char - input_program);
+			printf(" M%d\n", current_char - input_program);
 			output_program[output_index++] = ((struct LanguageDefinitionDependencyList *) tree_leaf_current->content)->byte;
 			// Dynamic reallocation as program grows
 			if(output_index >= output_size) {
@@ -188,6 +189,8 @@ struct LanguageDefinitionCompilerOutput *language_definition_compile(char *input
 			previous_match = current_char;
 		}
 	}
+
+	printf("\n");
 
 	output_struct->program = output_program;
 	output_struct->size = output_index;
