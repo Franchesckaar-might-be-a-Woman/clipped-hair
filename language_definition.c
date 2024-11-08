@@ -199,8 +199,15 @@ struct LanguageDefinitionCompilerOutput *language_definition_compile(char *input
 		if(tree_leaf_current->content != NULL) {
 			printf(" MC%d\n", current_char - input_program);
 			tree_leaf_content = (struct LanguageDefinitionDependencyList *) tree_leaf_current->content;
-			if(tree_leaf_content->type == LANGUAGE_DEFINITION_DEPENDENCY_BYTE) output_program[output_index++] = tree_leaf_content->byte;
+
+			if(tree_leaf_content->type == LANGUAGE_DEFINITION_DEPENDENCY_BYTE) {
+				while(tree_leaf_content != NULL) {
+					output_program[output_index++] = tree_leaf_content->byte;
+					tree_leaf_content = tree_leaf_content->next;
+				}
+			}
 			else if(tree_leaf_content->type == LANGUAGE_DEFINITION_DEPENDENCY_MODIFIER_OR) output_program[output_index - 1] |= tree_leaf_content->byte;
+
 			has_extra_output = true;
 		}
 
