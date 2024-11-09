@@ -4,24 +4,16 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "builtin.h"
+#include "chained_list.h"
 #include "tree.h"
+
+#define LANGUAGE_DEFINITION_CHAR_RR '/'
 
 enum LanguageDefinitionParserState {
 	LANGUAGE_DEFINITION_STATE_SKIP = -1,
 	LANGUAGE_DEFINITION_STATE_RR_SEARCH = 10,
 	LANGUAGE_DEFINITION_STATE_RR_REPLACE = 11,
-};
-
-enum LanguageDefinitionCharDefinition {
-	LANGUAGE_DEFINITION_CHAR_ZERO = '0',
-	LANGUAGE_DEFINITION_CHAR_HEX = 'x',
-	LANGUAGE_DEFINITION_CHAR_RR = '/',
-};
-
-enum LanguageDefinitionDependencyType {
-	LANGUAGE_DEFINITION_DEPENDENCY_BYTE = 1,
-	LANGUAGE_DEFINITION_DEPENDENCY_COMMAND = 2,
-	LANGUAGE_DEFINITION_DEPENDENCY_MODIFIER_OR = 10,
 };
 
 struct LanguageDefinitionSearchReplaceList {
@@ -30,13 +22,6 @@ struct LanguageDefinitionSearchReplaceList {
 	char *search;
 	char *replace;
 	struct LanguageDefinitionSearchReplaceList *next;
-};
-
-struct LanguageDefinitionDependencyList {
-	char type;
-	char byte;
-	struct TreeLeaf *dependency;
-	struct LanguageDefinitionDependencyList *next;
 };
 
 struct LanguageDefinitionDependencyTree {

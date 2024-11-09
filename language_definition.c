@@ -1,4 +1,3 @@
-#include "tree.h"
 #include "language_definition.h"
 
 struct LanguageDefinitionSearchReplaceList *language_definition_tokenize(char *input_value) {
@@ -86,14 +85,6 @@ struct TreeLeaf *language_definition_create_command_tree(struct LanguageDefiniti
 	return command_tree_root;
 }
 
-char char_as_hex(char hex_char) {
-	if(hex_char >= 0x30 && hex_char <= 0x39) return hex_char - 0x30;
-	else if(hex_char >= 0x41 && hex_char <= 0x46) return (hex_char - 0x37);
-	else if(hex_char >= 0x61 && hex_char <= 0x66) return (hex_char - 0x57);
-	// Error
-	else return -1;
-}
-
 void language_definition_resolve_command_tree(struct TreeLeaf *command_tree_root) {
 	// Iterate over all existing commands to resolve `replace` fields
 	struct TreeBranchLinked *command_tree_child_root = command_tree_root->links;
@@ -105,36 +96,22 @@ void language_definition_resolve_command_tree(struct TreeLeaf *command_tree_root
 		if(command_tree_current->content != NULL) {
 			// At this point, replace is a string, let's convert it to tokens
 			char *replace = (char *) command_tree_current->content;
-			int current_index;
-			char current_char;
+			char *current_char;
 
-			struct LanguageDefinitionDependencyList *dependency_list_root = malloc(sizeof(struct LanguageDefinitionDependencyList));
-			struct LanguageDefinitionDependencyList *dependency_list_current = dependency_list_root;
-			struct LanguageDefinitionDependencyList *dependency_list_previous;
+			struct ChainedListElement *command_list_current = NULL;
+			struct ChainedListElement *command_list_root = NULL;
+			struct BuiltinCommand *command_current = NULL;
 
-			for(current_index = 0; current_index < strlen(replace); current_index++) {
-				current_char = replace[current_index];
+			for(current_char = replace; *current_char != '\0'; current_char++) {
+				command_current = builtin_command_parse(current_char);
+				if(command_current == NULL) continue;
 
-				// Process a byte in hexadecimal representation
-				if(current_char == LANGUAGE_DEFINITION_CHAR_ZERO && replace[current_index + 1] == LANGUAGE_DEFINITION_CHAR_HEX) {
-					if(current_index > 0 && replace[current_index - 1] == '|') dependency_list_current->type = LANGUAGE_DEFINITION_DEPENDENCY_MODIFIER_OR;
-					else dependency_list_current->type = LANGUAGE_DEFINITION_DEPENDENCY_BYTE;
-
-					dependency_list_current->byte = (char_as_hex(replace[current_index + 2]) << 4) + char_as_hex(replace[current_index + 3]);
-					dependency_list_current->next = malloc(sizeof(struct LanguageDefinitionDependencyList));
-					dependency_list_previous = dependency_list_current;
-					dependency_list_current = dependency_list_current->next;
-
-					current_index += 3;
-					continue;
-				}
-
-				// Process another command being referenced
-				// TODO
+				current_char += command_current->char_count - 1;
+				command_list_current = chained_list_insert((void *) command_current, command_list_current);
+				if(command_list_root == NULL) command_list_root = command_list_current;
 			}
 
-			dependency_list_previous->next = NULL;
-			command_tree_current->content = dependency_list_root;
+			command_tree_current->content = (void *) command_list_root;
 		}
 
 		language_definition_resolve_command_tree(command_tree_current);
@@ -146,7 +123,7 @@ struct LanguageDefinitionCompilerOutput *language_definition_compile(char *input
 	int output_index = 0;
 	char *output_program = malloc(output_size * sizeof(char));
 
-	struct LanguageDefinitionCompilerOutput *output_struct = malloc(sizeof(struct LanguageDefinitionCompilerOutput)); 
+	struct LanguageDefinitionCompilerOutput *output_struct = malloc(sizeof(struct LanguageDefinitionCompilerOutput));
 
 	struct LanguageDefinitionSearchReplaceList *avoid_token_root = language_definition_tokenize(input_program);
 	struct LanguageDefinitionSearchReplaceList *avoid_token_current = avoid_token_root;
@@ -155,9 +132,11 @@ struct LanguageDefinitionCompilerOutput *language_definition_compile(char *input
 	struct TreeLeaf *tree_leaf_current = tree_leaf_root;
 	language_definition_resolve_command_tree(tree_leaf_root);
 
+	struct BuiltinCommand *command_current = NULL;
+	struct ChainedListElement *tree_leaf_command_list;
+
 	char *current_char;
 	char *previous_match = input_program;
-	struct LanguageDefinitionDependencyList *tree_leaf_content;
 	bool has_extra_output;
 
 	for(current_char = input_program; *current_char != '\0'; current_char++) {
@@ -176,12 +155,13 @@ struct LanguageDefinitionCompilerOutput *language_definition_compile(char *input
 			continue;
 		}
 
-		// Process raw bytes
-		// XXX: redundant with previous function. Refactor with removing `current_index` in previous function.
-		if(*current_char == LANGUAGE_DEFINITION_CHAR_ZERO && *(current_char + 1) == LANGUAGE_DEFINITION_CHAR_HEX) {
+		// Process builtins
+		// XXX: support other commands, by refactoring with what's below
+		command_current = builtin_command_parse(current_char);
+		if(command_current != NULL && command_current->type == BUILTIN_COMMAND_BYTE) {
 			printf(" MB%d\n", current_char - input_program);
-			output_program[output_index++] = (char_as_hex(*(current_char + 2)) << 4) + char_as_hex(*(current_char + 3));
-			current_char += 3;
+			output_program[output_index++] = command_current->byte;
+			current_char += command_current->char_count - 1;
 			has_extra_output = true;
 		}
 
@@ -198,15 +178,22 @@ struct LanguageDefinitionCompilerOutput *language_definition_compile(char *input
 		// Append current content from tree
 		if(tree_leaf_current->content != NULL) {
 			printf(" MC%d\n", current_char - input_program);
-			tree_leaf_content = (struct LanguageDefinitionDependencyList *) tree_leaf_current->content;
+			tree_leaf_command_list = (struct ChainedListElement *) tree_leaf_current->content;
 
-			if(tree_leaf_content->type == LANGUAGE_DEFINITION_DEPENDENCY_BYTE) {
-				while(tree_leaf_content != NULL) {
-					output_program[output_index++] = tree_leaf_content->byte;
-					tree_leaf_content = tree_leaf_content->next;
+			while(tree_leaf_command_list != NULL) {
+				command_current = (struct BuiltinCommand *) tree_leaf_command_list->element;
+				switch(command_current->type) {
+					case BUILTIN_COMMAND_BYTE:
+						output_program[output_index++] = command_current->byte;
+						break;
+
+					case BUILTIN_COMMAND_MODIFIER_OR:
+						output_program[output_index - 1] |= command_current->byte;
+						break;
 				}
+
+				tree_leaf_command_list = tree_leaf_command_list->next;
 			}
-			else if(tree_leaf_content->type == LANGUAGE_DEFINITION_DEPENDENCY_MODIFIER_OR) output_program[output_index - 1] |= tree_leaf_content->byte;
 
 			has_extra_output = true;
 		}

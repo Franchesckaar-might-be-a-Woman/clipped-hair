@@ -2,6 +2,8 @@
 #include <string.h>
 #include <stdbool.h>
 
+#include "builtin.h"
+#include "chained_list.h"
 #include "tree.h"
 #include "language_definition.h"
 
@@ -60,9 +62,15 @@ bool test_03_lexer_resolves_from_program(void) {
 	struct TreeLeaf *tree_root = language_definition_create_command_tree(sr_list);
 	language_definition_resolve_command_tree(tree_root);
 
-	ASSERT_EQUAL("resolves to two bytes - first", ((struct LanguageDefinitionDependencyList *) tree_root->links->to->links->to->content)->byte, (char) 0x90);
-	ASSERT_EQUAL("resolves to two bytes - second", ((struct LanguageDefinitionDependencyList *) tree_root->links->to->links->to->content)->next->byte, (char) 0x80);
-	ASSERT_EQUAL("resolves to two bytes - no third", ((struct LanguageDefinitionDependencyList *) tree_root->links->to->links->to->content)->next->next, NULL);
+	struct ChainedListElement *command_list = (struct ChainedListElement *) tree_root->links->to->links->to->content;
+	struct BuiltinCommand *first_command = (struct BuiltinCommand *) command_list->element;
+	struct BuiltinCommand *second_command = (struct BuiltinCommand *) command_list->next->element;
+
+	ASSERT_EQUAL("first command is byte", first_command->type, BUILTIN_COMMAND_BYTE);
+	ASSERT_EQUAL("first command is correct", first_command->byte, (char) 0x90);
+	ASSERT_EQUAL("second command is byte", second_command->type, BUILTIN_COMMAND_BYTE);
+	ASSERT_EQUAL("second command is correct", second_command->byte, (char) 0x80);
+	ASSERT_EQUAL("no third command", command_list->next->next, NULL);
 
 	return true;
 }
@@ -109,15 +117,56 @@ bool test_12_supports_modifiers(void) {
 	return true;
 }
 
+bool test_20_builtin_byte(void) {
+	printf("TEST	builtin byte command works\n");
+
+	char input_value[] = "0x30";
+	struct BuiltinCommand *command = builtin_command_parse(input_value);
+
+	ASSERT_EQUAL("command type", command->type, BUILTIN_COMMAND_BYTE);
+	ASSERT_EQUAL("char count", command->char_count, 4);
+	ASSERT_EQUAL("content", command->byte, 0x30);
+
+	return true;
+}
+
+bool test_21_builtin_position(void) {
+	printf("TEST	builtin position command works\n");
+
+	char input_value[] = "!";
+	struct BuiltinCommand *command = builtin_command_parse(input_value);
+
+	ASSERT_EQUAL("command type", command->type, BUILTIN_COMMAND_SAVE_RESTORE);
+	ASSERT_EQUAL("char count", command->char_count, 1);
+
+	return true;
+}
+
+bool test_22_builtin_invalid(void) {
+	printf("TEST	builtin rejects invalid command\n");
+
+	char input_value[] = " ";
+	struct BuiltinCommand *command = builtin_command_parse(input_value);
+
+	ASSERT_EQUAL("is null", command, NULL);
+
+	return true;
+}
+
 int main(void) {
 	bool success = true;
 
 	success &= ~test_01_lexer_tokenizes();
 	success &= ~test_02_lexer_creates_command_tree();
 	success &= ~test_03_lexer_resolves_from_program();
+
 	success &= ~test_10_full_compilation_process();
 	success &= ~test_11_supports_same_root_commands();
 	success &= ~test_12_supports_modifiers();
+
+	success &= ~test_20_builtin_byte();
+	success &= ~test_21_builtin_position();
+	success &= ~test_22_builtin_invalid();
 
 	return success;
 }
