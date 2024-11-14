@@ -11,3 +11,16 @@ struct ChainedListElement *chained_list_insert(void *element, struct ChainedList
 	return child;
 }
 
+struct ChainedListElement *chained_list_insert_last(void *element, struct ChainedListElement *parent_root) {
+	struct ChainedListElement *parent = chained_list_find_last(parent_root);
+	return chained_list_insert(element, parent);
+}
+
+struct ChainedListElement *chained_list_find_last(struct ChainedListElement *start) {
+	struct ChainedListElement *current = start;
+	while(current->next != NULL) {
+		current = current->next;
+	}
+
+	return current;
+}

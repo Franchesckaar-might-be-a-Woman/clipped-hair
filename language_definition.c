@@ -87,12 +87,12 @@ struct TreeLeaf *language_definition_create_command_tree(struct LanguageDefiniti
 
 void language_definition_resolve_command_tree(struct TreeLeaf *command_tree_root) {
 	// Iterate over all existing commands to resolve `replace` fields
-	struct TreeBranchLinked *command_tree_child_root = command_tree_root->links;
-	struct TreeBranchLinked *command_tree_child_current;
+	struct ChainedListElement *command_tree_child_root = command_tree_root->children;
+	struct ChainedListElement *command_tree_child_current;
 	struct TreeLeaf *command_tree_current;
 
 	for(command_tree_child_current = command_tree_child_root; command_tree_child_current != NULL; command_tree_child_current = command_tree_child_current->next) {
-		command_tree_current = command_tree_child_current->to;
+		command_tree_current = (struct TreeLeaf *) command_tree_child_current->element;
 		if(command_tree_current->content != NULL) {
 			// At this point, replace is a string, let's convert it to tokens
 			char *replace = (char *) command_tree_current->content;

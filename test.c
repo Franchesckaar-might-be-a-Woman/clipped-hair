@@ -48,21 +48,21 @@ bool test_02_lexer_creates_command_tree(void) {
 
 	struct TreeLeaf *output_tree = language_definition_create_command_tree(&input_list);
 	ASSERT_EQUAL("first leaf has no content", output_tree->content, NULL);
-	ASSERT_EQUAL("second leaf has no content", output_tree->links->to->content, NULL);
-	ASSERT_STRING_EQUAL("third leaf contains replace string", output_tree->links->to->links->to->content, input_list.replace);
+	ASSERT_EQUAL("second leaf has no content", ((struct TreeLeaf *) output_tree->children->element)->content, NULL);
+	ASSERT_STRING_EQUAL("third leaf contains replace string", ((struct TreeLeaf *) ((struct TreeLeaf *) output_tree->children->element)->children->element)->content, input_list.replace);
 
 	return true;
 }
 
 bool test_03_lexer_resolves_from_program(void) {
-	printf("TEST	lever resolves all from program\n");
+	printf("TEST	lexer resolves all from program\n");
 
 	char input_program[] = "/no/0x900x80/";
 	struct LanguageDefinitionSearchReplaceList *sr_list = language_definition_tokenize(input_program);
 	struct TreeLeaf *tree_root = language_definition_create_command_tree(sr_list);
 	language_definition_resolve_command_tree(tree_root);
 
-	struct ChainedListElement *command_list = (struct ChainedListElement *) tree_root->links->to->links->to->content;
+	struct ChainedListElement *command_list = (struct ChainedListElement *) ((struct TreeLeaf *) ((struct TreeLeaf *) tree_root->children->element)->children->element)->content;
 	struct BuiltinCommand *first_command = (struct BuiltinCommand *) command_list->element;
 	struct BuiltinCommand *second_command = (struct BuiltinCommand *) command_list->next->element;
 
@@ -153,6 +153,39 @@ bool test_22_builtin_invalid(void) {
 	return true;
 }
 
+bool test_30_chained_list_insert(void) {
+	printf("TEST	chained list properly inserts children\n");
+
+	struct ChainedListElement *root = (struct ChainedListElement *) malloc(sizeof(struct ChainedListElement));
+	struct ChainedListElement *second = chained_list_insert((void *) 0x1, root);
+	struct ChainedListElement *third = chained_list_insert((void *) 0x2, second);
+	struct ChainedListElement *last = chained_list_insert_last((void *) 0xf, root);
+
+	ASSERT_EQUAL("insert second", root->next->element, (void *) 0x1);
+	ASSERT_EQUAL("insert third", root->next->next->element, (void *) 0x2);
+	ASSERT_EQUAL("insert last", root->next->next->next->element, (void *) 0xf);
+
+	return true;
+}
+
+bool test_31_tree_insert(void) {
+	printf("TEST	tree properly inserts children\n");
+
+	struct TreeLeaf *root = tree_create_root();
+	struct TreeLeaf *j = tree_insert_leaf((uint32_t) 'j', root);
+	struct TreeLeaf *jn = tree_insert_leaf((uint32_t) 'n', j);
+	struct TreeLeaf *jm = tree_insert_leaf((uint32_t) 'm', j);
+
+	struct ChainedListElement *root_children = (struct ChainedListElement *) root->children;
+
+	ASSERT_EQUAL("on root - first", ((struct TreeLeaf *) root_children->element)->identifier, (uint32_t) 'j');
+	ASSERT_EQUAL("on root - no second", root_children->next, NULL);
+	ASSERT_EQUAL("below root - first", ((struct TreeLeaf *) ((struct TreeLeaf *) root_children->element)->children->element)->identifier, (uint32_t) 'n');
+	ASSERT_EQUAL("below root - second", ((struct TreeLeaf *) ((struct TreeLeaf *) root_children->element)->children->next->element)->identifier, (uint32_t) 'm');
+
+	return true;
+}
+
 int main(void) {
 	bool success = true;
 
@@ -167,6 +200,9 @@ int main(void) {
 	success &= ~test_20_builtin_byte();
 	success &= ~test_21_builtin_position();
 	success &= ~test_22_builtin_invalid();
+
+	success &= ~test_30_chained_list_insert();
+	success &= ~test_31_tree_insert();
 
 	return success;
 }
