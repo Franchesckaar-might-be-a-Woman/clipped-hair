@@ -6,6 +6,7 @@
 #include "chained_list.h"
 #include "tree.h"
 #include "language_definition.h"
+#include "address_space.h"
 
 #define ASSERT_EQUAL(a, x, y) do {			\
 	if(x != y) {							\
@@ -186,6 +187,25 @@ bool test_31_tree_insert(void) {
 	return true;
 }
 
+bool test_40_address_space_unify(void) {
+	printf("TEST	two address spaces can be unified\n");
+
+	int i = 0;
+	struct AddressSpace *first_space = address_space_create(0x10, 4);
+	for(; i < 4; i++) first_space->bytes[i] = i;
+	first_space->byte_counter = 4;
+	struct AddressSpace *second_space = address_space_create(0x0, 4);
+	for(; i < 8; i++) second_space->bytes[i - 4] = i;
+	second_space->byte_counter = 4;
+	struct AddressSpace *unified_space = address_space_unify(first_space, second_space);
+
+	for(i = 0; i < 4; i++) ASSERT_EQUAL("byte match", unified_space->bytes[0x10 + i], i);
+	for(; i < 8; i++) ASSERT_EQUAL("byte match", unified_space->bytes[i - 4], i);
+	ASSERT_EQUAL("size right", unified_space->byte_counter, 0x14);
+
+	return true;
+}
+
 int main(void) {
 	bool success = true;
 
@@ -203,6 +223,8 @@ int main(void) {
 
 	success &= ~test_30_chained_list_insert();
 	success &= ~test_31_tree_insert();
+
+	success &= ~test_40_address_space_unify();
 
 	return success;
 }
